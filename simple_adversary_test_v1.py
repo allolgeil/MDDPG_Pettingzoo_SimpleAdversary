@@ -4,10 +4,13 @@ import torch
 import torch.nn as nn
 import os
 import time
+import matplotlib.pyplot as plt
 
 from sympy.codegen.ast import continue_
 
 from maddpg_agent_v1 import Agent
+
+start_time = time.time()
 
 #Set device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -19,9 +22,9 @@ def multi_obs_to_state(multi_obs):
         state = np.concatenate([state, agent_obs])
     return  state
 
-NUM_EPISODE = 10000
-NUM_STEP = 100
-MEMORY_SIZE = 100000
+NUM_EPISODE = 10
+NUM_STEP = 50
+MEMORY_SIZE = 10000
 BATCH_SIZE = 512
 TARGET_UPDATE_INTERVAL = 200
 LR_ACTOR = 0.01
@@ -60,7 +63,7 @@ for agent_i in range(NUM_AGENT):
                   fc2_dims=HIDDEN_DIM, gamma=GAMMA, tau=TAU, batch_size=BATCH_SIZE)   #TODO
     agents.append(agent)
 
-
+episode_rewards = []
 # 2 Main training loop
 for episode_i in range(NUM_EPISODE):
     multi_obs, infos = env.reset()
@@ -119,7 +122,7 @@ for episode_i in range(NUM_EPISODE):
             batch_obses, batch_next_obses, batch_states, batch_next_states, \
                 batch_actions, batch_rewards, batch_dones = agent.replay_buffer.sample(batch_idx)   #TODO
 
-            # Single + batch
+            #  2.4.1.1 Single + batch
             batch_obses_tensor = torch.tensor(batch_obses, dtype=torch.float).to(device)
             batch_next_obses_tensor = torch.tensor(batch_next_obses, dtype=torch.float).to(device)
             batch_states_tensor = torch.tensor(batch_states, dtype=torch.float).to(device)
@@ -128,7 +131,7 @@ for episode_i in range(NUM_EPISODE):
             batch_rewards_tensor = torch.tensor(batch_rewards, dtype=torch.float).to(device)
             batch_dones_tensor = torch.tensor(batch_dones, dtype=torch.float).to(device)
 
-            # Multiple + batch
+            # 2.4.1.2 Multiple + batch
             multi_batch_obses.append(batch_obses_tensor)
             multi_batch_next_obses.append(batch_next_obses_tensor)
             multi_batch_states.append(batch_states_tensor)
@@ -148,7 +151,7 @@ for episode_i in range(NUM_EPISODE):
         multi_batch_next_actions_tensor = torch.cat(multi_batch_next_actions, dim=1).to(device)
         multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions, dim=1).to(device)
 
-        # Update critic and actor
+        # 2.4.2 Update critic and actor
         if (total_step + 1) % TARGET_UPDATE_INTERVAL == 0:
 
             for agent_i in range(NUM_AGENT):
@@ -161,7 +164,7 @@ for episode_i in range(NUM_EPISODE):
                 batch_dones_tentor = multi_batch_dones[agent_i]
                 batch_actions_tentor = multi_batch_actions[agent_i]
 
-                # Target critic
+                # 2.4.2.1 Target critic
                 critic_target_q = agent.target_critic.forward(batch_next_states_tentor,
                                                               multi_batch_next_actions_tensor.detach()) #TODO
                 y = (batch_rewards_tentor + (1 - batch_dones_tentor) * agent.gamma * critic_target_q).flatten()
@@ -173,19 +176,24 @@ for episode_i in range(NUM_EPISODE):
                 critic_loss.backward()
                 agent.critic.optimizer.step()
 
-                # Update actor
+                # 2.4.2.2 Update actor
+                multi_batch_online_actions_list = [
+                    single_batch_online_action if j == agent_i else single_batch_online_action.detach()
+                    for j, single_batch_online_action in enumerate(multi_batch_online_actions)
+                ]
+                multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions_list, dim=1).to(device)
                 actor_loss = agent.critic.forward(batch_states_tentor,
-                                                  multi_batch_online_actions_tensor.detach()).flatten()
+                                                  multi_batch_online_actions_tensor).flatten()
                 actor_loss = -torch.mean(actor_loss)
                 agent.actor.optimizer.zero_grad()
                 actor_loss.backward()
                 agent.actor.optimizer.step()
 
-                # Update target critic
+                # 2.4.2.3 Update target critic
                 for target_param, param in zip(agent.target_critic.parameters(), agent.critic.parameters()):
                     target_param.data.copy_(agent.tau * param.data + (1.0 - agent.tau) * target_param.data)
 
-                # Update target actor
+                # 2.4.2.4 Update target actor
                 for target_param, param in zip(agent.target_actor.parameters(), agent.actor.parameters()):
                     target_param.data.copy_(agent.tau * param.data + (1.0 - agent.tau) * target_param.data)
 
@@ -194,7 +202,7 @@ for episode_i in range(NUM_EPISODE):
         print(f"Episode_reward: {episode_reward}")
 
     # 3 Render the env
-    if (episode_i + 1) % 2 ==0:
+    if (episode_i + 1) % 50 ==0:
         env = simple_adversary_v3.parallel_env(N=2,
                                                max_cycles=NUM_STEP,
                                                continuous_actions=True,
@@ -224,5 +232,19 @@ for episode_i in range(NUM_EPISODE):
             if not flag:
                 os.makedirs(agent_path)
             torch.save(agent.actor.state_dict(), f"{agent_path}" + f"agent_{agent_i}_actor{scenario}_{timestamp}.path")
+    print(f"episode_i: {episode_i}")
+    episode_rewards.append(episode_reward)
+
+end_time = time.time()
+total_time = end_time - start_time
+print(f'Total Duration: {total_time:.2f}')
+
+plt.figure(figsize=(10, 5))
+plt.plot(range(len(episode_rewards)), episode_rewards)
+plt.title('Reward per Episode')
+plt.xlabel('Episode')
+plt.ylabel('Total Review')
+plt.grid(True)
+plt.show()
 
 env.close()

@@ -80,7 +80,8 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu((self.fc2(x)))
-        mu = torch.tanh(self.pi(x))  # softmax离散互斥动作\sigmoid[0,1]独立动作但无正负，tanh[-1,1]且连续
+        #mu = torch.tanh(self.pi(x))  # softmax离散互斥动作\sigmoid[0,1]独立动作但无正负，tanh[-1,1]且连续
+        mu = torch.sigmoid(self.pi(x))
         return mu
 
     def save_checkpoint(self, checkpoint_file):
