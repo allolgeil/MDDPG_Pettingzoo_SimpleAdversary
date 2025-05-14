@@ -200,7 +200,7 @@ for episode_i in range(NUM_EPISODE):
 
         multi_obs = multi_next_obs
         episode_reward += sum([single_reward for single_reward in multi_reward.values()])
-        print(f"Episode_reward:   {episode_reward}")
+        print(f"Episode_reward:  {episode_reward}")
 
     # 3 Render the env
     if (episode_i + 1) % 50 ==0:
