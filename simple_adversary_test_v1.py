@@ -97,6 +97,7 @@ for episode_i in range(NUM_EPISODE):
             single_done = multi_done[agent_name]
             agent.replay_buffer.add_memo(single_obs, single_next_obs, state, next_state,
                                          single_action, single_reward, single_done) #TODO
+            print(f"agent:single_action: {agent}:{single_action}")
 
         # 2.4 Update brain every fixed steps
 
