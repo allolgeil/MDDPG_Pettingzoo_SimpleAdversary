@@ -12,21 +12,24 @@ from maddpg_agent_v1 import Agent
 
 start_time = time.time()
 
-#Set device
+# Set device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"using device: {device}")
+
 
 def multi_obs_to_state(multi_obs):
     state = np.array([])
     for agent_obs in multi_obs.values():
         state = np.concatenate([state, agent_obs])
-    return  state
+    return state
 
-NUM_EPISODE = 10
+
+NUM_EPISODE = 3
+EPISODE = NUM_EPISODE
 NUM_STEP = 50
 MEMORY_SIZE = 10000
 BATCH_SIZE = 512
-TARGET_UPDATE_INTERVAL = 200
+TARGET_UPDATE_INTERVAL = 50
 LR_ACTOR = 0.01
 LR_CRITIC = 0.01
 HIDDEN_DIM = 64
@@ -34,7 +37,8 @@ GAMMA = 0.99
 TAU = 0.01
 
 # 1 Initialize the agents
-env = simple_adversary_v3.parallel_env(render_mode = "human",N=2, max_cycles=NUM_STEP, continuous_actions=True, dynamic_rescaling=False)
+env = simple_adversary_v3.parallel_env(render_mode="human", N=2, max_cycles=NUM_STEP, continuous_actions=True,
+                                       dynamic_rescaling=False)
 multi_obs, infos = env.reset()
 NUM_AGENT = env.num_agents
 agent_name_list = env.agents
@@ -47,7 +51,8 @@ timestamp = time.strftime("%Y%m%d%H%M%S")
 # 1.1 Get obs_dim(可以和1.2的方式obs_dim = [env.observation_space(name).shape[0] for name in agent_name_list])
 obs_dim = []
 for agent_obs in multi_obs.values():
-    obs_dim.append(agent_obs.shape[0])
+    obs_dim.append(agent_obs.shape[
+                       0])  # 遍历multi_obs的值，并取出它的第一个维度是多少，若 agent_obs = [0.1, 0.5, -0.2, 1.0]，则 agent_obs.shape[0] 的值为 4
 state_dim = sum(obs_dim)
 
 # 1.2 Get action_dim
@@ -60,12 +65,12 @@ for agent_i in range(NUM_AGENT):
     print(f"Initializing agent {agent_i}...")
     agent = Agent(memo_size=MEMORY_SIZE, obs_dim=obs_dim[agent_i], state_dim=state_dim, n_agent=NUM_AGENT,
                   acion_dim=action_dim[agent_i], alpha=LR_ACTOR, beta=LR_CRITIC, fc1_dims=HIDDEN_DIM,
-                  fc2_dims=HIDDEN_DIM, gamma=GAMMA, tau=TAU, batch_size=BATCH_SIZE)   #TODO
+                  fc2_dims=HIDDEN_DIM, gamma=GAMMA, tau=TAU, batch_size=BATCH_SIZE)  # TODO
     agents.append(agent)
 
 episode_rewards = []
 # 2 Main training loop
-for episode_i in range(NUM_EPISODE):
+for episode_i in range(EPISODE):
     multi_obs, infos = env.reset()
     episode_reward = 0
     multi_done = {agent_name: False for agent_name in agent_name_list}
@@ -73,10 +78,10 @@ for episode_i in range(NUM_EPISODE):
         total_step = episode_i * NUM_STEP + step_i
         # 2.1 Collect actions from all agents
         multi_actions = {}
-        for agent_i,agent_name in enumerate(agent_name_list):
+        for agent_i, agent_name in enumerate(agent_name_list):
             agent = agents[agent_i]
             single_obs = multi_obs[agent_name]
-            single_action = agent.get_action(single_obs)    #TODO
+            single_action = agent.get_action(single_obs)  # TODO
             multi_actions[agent_name] = single_action
 
         # 2.2 Execute action
@@ -85,9 +90,9 @@ for episode_i in range(NUM_EPISODE):
         next_state = multi_obs_to_state(multi_next_obs)
 
         if step_i >= NUM_STEP - 1:
-            multi_done = {agent_name: True for  agent_name in agent_name_list}
+            multi_done = {agent_name: True for agent_name in agent_name_list}
 
-        # 2.3 Store memory
+        # 2.3 Store memory  #每个agent都有自己的AC网络和buffer，当其中的agent不能工作，其它agent依旧正常
         for agent_i, agent_name in enumerate(agent_name_list):
             agent = agents[agent_i]
             single_obs = multi_obs[agent_name]
@@ -96,7 +101,7 @@ for episode_i in range(NUM_EPISODE):
             single_reward = multi_reward[agent_name]
             single_done = multi_done[agent_name]
             agent.replay_buffer.add_memo(single_obs, single_next_obs, state, next_state,
-                                         single_action, single_reward, single_done) #TODO
+                                         single_action, single_reward, single_done)  # TODO
             print(f"agent:single_action: {agent}:{single_action}")
 
         # 2.4 Update brain every fixed steps
@@ -121,7 +126,7 @@ for episode_i in range(NUM_EPISODE):
         for agent_i in range(NUM_AGENT):
             agent = agents[agent_i]
             batch_obses, batch_next_obses, batch_states, batch_next_states, \
-                batch_actions, batch_rewards, batch_dones = agent.replay_buffer.sample(batch_idx)   #TODO
+                batch_actions, batch_rewards, batch_dones = agent.replay_buffer.sample(batch_idx)  # TODO
 
             #  2.4.1.1 Single + batch
             batch_obses_tensor = torch.tensor(batch_obses, dtype=torch.float).to(device)
@@ -139,17 +144,20 @@ for episode_i in range(NUM_EPISODE):
             multi_batch_next_states.append(batch_next_states_tensor)
             multi_batch_actions.append(batch_actions_tensor)
 
-            single_batch_next_action = agent.target_actor.forward(batch_next_obses_tensor)   #TODO
+            single_batch_next_action = agent.target_actor.forward(batch_next_obses_tensor)  # TODO
             multi_batch_next_actions.append(single_batch_next_action)
 
-            single_batch_online_action = agent.actor.forward(batch_obses_tensor) #TODO
+            single_batch_online_action = agent.actor.forward(batch_obses_tensor)  # TODO
             multi_batch_online_actions.append(single_batch_online_action)
 
             multi_batch_rewards.append(batch_rewards_tensor)
             multi_batch_dones.append(batch_dones_tensor)
 
+        # 来自agent.replay_buffer.sample(batch_idx)，用于在线Critic网络actor前向传播求Q值，再用于最小化MSE的梯度优化
         multi_batch_actions_tensor = torch.cat(multi_batch_actions, dim=1).to(device)
+        # 来自agent.target_actor.forward(batch_next_obses_tensor)，用于目标Critic'网络actor'前向传播求Q'值,求目标值y，再用于最小化MSE的梯度优化
         multi_batch_next_actions_tensor = torch.cat(multi_batch_next_actions, dim=1).to(device)
+        # 来自agent.actor.forward(batch_obses_tensor)，用于更新Actor网络，
         multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions, dim=1).to(device)
 
         # 2.4.2 Update critic and actor
@@ -167,34 +175,37 @@ for episode_i in range(NUM_EPISODE):
 
                 # 2.4.2.1 Target critic
                 critic_target_q = agent.target_critic.forward(batch_next_states_tentor,
-                                                              multi_batch_next_actions_tensor.detach()) #TODO
+                                                              multi_batch_next_actions_tensor.detach())  # TODO
                 y = (batch_rewards_tentor + (1 - batch_dones_tentor) * agent.gamma * critic_target_q).flatten()
 
-                critic_q = agent.critic.forward(batch_states_tentor, multi_batch_actions_tensor.detach()).flatten()  #TODO
+                critic_q = agent.critic.forward(batch_states_tentor,
+                                                multi_batch_actions_tensor.detach()).flatten()  # TODO
 
+                # Update critic
                 critic_loss = nn.MSELoss()(y, critic_q)
                 agent.critic.optimizer.zero_grad()
                 critic_loss.backward()
                 agent.critic.optimizer.step()
 
-                # 2.4.2.2 Update actor
+                # Update actor
                 multi_batch_online_actions_list = [
                     single_batch_online_action if j == agent_i else single_batch_online_action.detach()
                     for j, single_batch_online_action in enumerate(multi_batch_online_actions)
                 ]
                 multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions_list, dim=1).to(device)
                 actor_loss = agent.critic.forward(batch_states_tentor,
-                                                  multi_batch_online_actions_tensor).flatten()
+                                                  multi_batch_online_actions_tensor).flatten()  #这里其实为Q
                 actor_loss = -torch.mean(actor_loss)
                 agent.actor.optimizer.zero_grad()
                 actor_loss.backward()
                 agent.actor.optimizer.step()
 
-                # 2.4.2.3 Update target critic
+                # Update target critic
                 for target_param, param in zip(agent.target_critic.parameters(), agent.critic.parameters()):
                     target_param.data.copy_(agent.tau * param.data + (1.0 - agent.tau) * target_param.data)
+                    #与.parameters不同，对.data的操作不会影响梯度计算图，即不会被自动微分系统跟踪
 
-                # 2.4.2.4 Update target actor
+                # Update target actor
                 for target_param, param in zip(agent.target_actor.parameters(), agent.actor.parameters()):
                     target_param.data.copy_(agent.tau * param.data + (1.0 - agent.tau) * target_param.data)
 
@@ -203,7 +214,7 @@ for episode_i in range(NUM_EPISODE):
         print(f"Episode_reward:  {episode_reward}")
 
     # 3 Render the env
-    if (episode_i + 1) % 50 ==0:
+    if (episode_i + 1) % 50 == 0:
         env = simple_adversary_v3.parallel_env(N=2,
                                                max_cycles=NUM_STEP,
                                                continuous_actions=True,
