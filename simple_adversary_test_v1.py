@@ -153,7 +153,7 @@ for episode_i in range(EPISODE):
             multi_batch_rewards.append(batch_rewards_tensor)
             multi_batch_dones.append(batch_dones_tensor)
 
-        # 来自agent.replay_buffer.sample(batch_idx)，用于在线Critic网络actor前向传播求Q值，再用于最小化MSE的梯度优化
+        # 直接来自agent.replay_buffer.sample(batch_idx)，用于在线Critic网络actor前向传播求Q值，再用于最小化MSE的梯度优化
         multi_batch_actions_tensor = torch.cat(multi_batch_actions, dim=1).to(device)
         # 来自agent.target_actor.forward(batch_next_obses_tensor)，用于目标Critic'网络actor'前向传播求Q'值,求目标值y，再用于最小化MSE的梯度优化
         multi_batch_next_actions_tensor = torch.cat(multi_batch_next_actions, dim=1).to(device)

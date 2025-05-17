@@ -80,7 +80,7 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu((self.fc2(x)))
-        #mu = torch.tanh(self.pi(x))  # softmax离散互斥动作\sigmoid[0,1]独立动作但无正负，tanh[-1,1]且连续
+        #mu = torch.tanh(self.pi(x))  # softmax离散互斥动作(需加dim=1),sigmoid[0,1]独立动作但无正负，tanh[-1,1]且连续
         mu = torch.sigmoid(self.pi(x))
         return mu
 
@@ -115,7 +115,7 @@ class Agent:
         noise = torch.randn(self.action_dim).to(device) * 0.2
         single_action = torch.clamp(input=single_action + noise, min=0.0, max=1.0)
 
-        return single_action.detach().cpu().numpy()[0]
+        return single_action.detach().cpu().numpy()[0]  #这里[0]的作用是降维，得到 (action_dim,) 的数组，若处理批量数据，改用 .squeeze(0)
 
     def save_model(self, filename):
         self.actor.save_checkpoint(filename)
