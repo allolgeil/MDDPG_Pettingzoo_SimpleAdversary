@@ -161,6 +161,7 @@ for episode_i in range(EPISODE):
         multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions, dim=1).to(device)
 
         # 2.4.2 Update critic and actor
+        #核心作用：通过间隔性更新目标网络，平衡训练稳定性与学习效率
         if (total_step + 1) % TARGET_UPDATE_INTERVAL == 0:
 
             for agent_i in range(NUM_AGENT):
@@ -214,13 +215,13 @@ for episode_i in range(EPISODE):
         print(f"Episode_reward:  {episode_reward}")
 
     # 3 Render the env
-    if (episode_i + 1) % 50 == 0:
+    if (episode_i + 1) % 100 == 0:
         env = simple_adversary_v3.parallel_env(N=2,
                                                max_cycles=NUM_STEP,
                                                continuous_actions=True,
                                                render_mode="human")
 
-        for test_epi_i in range(10):
+        for test_epi_i in range(5):
             multi_obs, infos = env.reset()
             for step_i in range(NUM_STEP):
                 multi_actions = {}
