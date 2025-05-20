@@ -179,6 +179,7 @@ for episode_i in range(EPISODE):
                                                               multi_batch_next_actions_tensor.detach())  # TODO
                 y = (batch_rewards_tentor + (1 - batch_dones_tentor) * agent.gamma * critic_target_q).flatten()
 
+                # Critic
                 critic_q = agent.critic.forward(batch_states_tentor,
                                                 multi_batch_actions_tensor.detach()).flatten()  # TODO
 
@@ -196,7 +197,7 @@ for episode_i in range(EPISODE):
                 multi_batch_online_actions_tensor = torch.cat(multi_batch_online_actions_list, dim=1).to(device)
                 actor_loss = agent.critic.forward(batch_states_tentor,
                                                   multi_batch_online_actions_tensor).flatten()  #这里其实为Q
-                actor_loss = -torch.mean(actor_loss)
+                actor_loss = -torch.mean(actor_loss)    #为什么这么写？即对样本的Q值求平均。3)Actor更新（策略梯度）:通过Critic的指导（Q_{\mu}^i对动作的梯度），调整Actor策略μ_i以最大化长期奖励。
                 agent.actor.optimizer.zero_grad()
                 actor_loss.backward()
                 agent.actor.optimizer.step()
